@@ -39,6 +39,9 @@ public:
         return m_aabb;
     }
 
+    /**
+     * Lookups
+     */
     /// Are float-valued lookups permitted?
     virtual bool supportsFloatLookups() const;
 
@@ -56,6 +59,28 @@ public:
 
     /// Look up a vector value by position
     virtual Vector lookupVector(const Point &p) const;
+
+    /**
+     * Edits
+     */
+    /// Are float-valued edits permitted?
+    virtual bool supportsFloatEdits() const;
+
+    /// Edit a floating point value by position
+    virtual void editFloat(const Point &p, const Float &f);
+
+    /// Are spectrum-valued edits permitted?
+    virtual bool supportsSpectrumEdits() const;
+
+    /// Edit a spectrum value by position
+    virtual void editSpectrum(const Point &p, const Spectrum &s);
+
+    /// Are vector-valued edits permitted?
+    virtual bool supportsVectorEdits() const;
+
+    /// Edit a vector value by position
+    virtual void editVector(const Point &p, const Vector &v);
+
 
     /**
      * \brief Return the recommended step size for numerical

@@ -66,6 +66,30 @@ bool VolumeDataSource::supportsVectorLookups() const {
     return false;
 }
 
+void VolumeDataSource::editFloat(const Point &p, const Float &f) {
+    Log(EError, "'%s': does not implement editFloat()!", getClass()->getName().c_str());
+}
+
+void VolumeDataSource::editSpectrum(const Point &p, const Spectrum &s) {
+    Log(EError, "'%s': does not implement editSpectrum()!", getClass()->getName().c_str());
+}
+
+void VolumeDataSource::editVector(const Point &p, const Vector &v) {
+    Log(EError, "'%s': does not implement editVector()!", getClass()->getName().c_str());
+}
+
+bool VolumeDataSource::supportsFloatEdits() const {
+    return false;
+}
+
+bool VolumeDataSource::supportsSpectrumEdits() const {
+    return false;
+}
+
+bool VolumeDataSource::supportsVectorEdits() const {
+    return false;
+}
+
 MTS_IMPLEMENT_CLASS(VolumeDataSource, true, ConfigurableObject)
 MTS_NAMESPACE_END
 
