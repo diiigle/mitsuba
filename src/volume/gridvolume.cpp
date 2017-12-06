@@ -42,6 +42,10 @@ MTS_NAMESPACE_BEGIN
  *       are expected to have access to an identical volume data file that can be
  *       mapped into memory. \default{\code{false}}
  *     }
+ *     \parameter{editable}{\Boolean}{
+ *       When this parameter is set to \code{true}, the implementation will
+ *       allow the volume data (and also the file) to be edited. \default{\code{false}}
+ *     }
  *     \parameter{toWorld}{\Transform}{
  *         Optional linear transformation that should be applied to the data
  *     }
@@ -124,6 +128,9 @@ public:
          * occurs on a remote machine).
          */
         m_sendData = props.getBoolean("sendData", false);
+
+        //is the volume data (and the file) allowed to be modified
+        m_editable = props.getBoolean("editable", false);
 
         loadFromFile(props.getString("filename"));
         configure();
@@ -219,7 +226,7 @@ public:
     void loadFromFile(const fs::path &filename) {
         m_filename = filename;
         fs::path resolved = Thread::getThread()->getFileResolver()->resolve(filename);
-        m_mmap = new MemoryMappedFile(resolved);
+        m_mmap = new MemoryMappedFile(resolved, !m_editable);
         ref<MemoryStream> stream = new MemoryStream(m_mmap->getData(), m_mmap->getSize());
         stream->setByteOrder(Stream::ELittleEndian);
 
@@ -389,6 +396,39 @@ public:
         }
     }
 
+    void editFloat(const Point &_p, const Float &f) {
+        if(!m_editable) return;
+
+        const Point p = m_worldToGrid.transformAffine(_p);
+
+        // NN interpolation for now
+		const int x = math::roundToInt(p.x);
+		const int y = math::roundToInt(p.y);
+		const int z = math::roundToInt(p.z);
+
+        if (x < 0 || y < 0 || z < 0 || x >= m_res.x ||
+            y >= m_res.y || z >= m_res.z)
+            return;
+
+		switch (m_volumeType) {
+			case EFloat32: {
+				float *floatData = (float*)m_data;
+				floatData[(z*m_res.y + y)*m_res.x + x] = (float) f;
+			}
+            break;
+			case EUInt8: {
+				m_data[(z*m_res.y + y)*m_res.x + x] = math::clamp(math::roundToInt(f * 255.0f), 0, 255);
+			}
+            break;
+            default: {
+                #if defined(MTS_DEBUG)
+                    Log(EDebug, "editFloat() is not supported for EVolumeType %i", m_volumeType);
+                #endif
+            }
+            break;
+		}
+    }
+
     Spectrum lookupSpectrum(const Point &_p) const {
         const Point p = m_worldToGrid.transformAffine(_p);
         const int x1 = math::floorToInt(p.x),
@@ -464,6 +504,44 @@ public:
                 }
             default: return Spectrum(0.0f);
         }
+    }
+
+    void editSpectrum(const Point &_p, const Spectrum &s) {
+        if(!m_editable) return;
+
+        const Point p = m_worldToGrid.transformAffine(_p);
+
+        // NN interpolation for now
+		const int x = math::roundToInt(p.x);
+		const int y = math::roundToInt(p.y);
+		const int z = math::roundToInt(p.z);
+
+        if (x < 0 || y < 0 || z < 0 || x >= m_res.x ||
+            y >= m_res.y || z >= m_res.z)
+            return;
+
+        float r,g,b;
+        s.toLinearRGB(r,g,b);
+
+		switch (m_volumeType) {
+			case EFloat32: {
+				float3 *spectrumData = (float3 *) m_data;
+				spectrumData[(z*m_res.y + y)*m_res.x + x] = float3(r,g,b);
+			}
+            break;
+			case EUInt8: {
+				m_data[3*((z*m_res.y + y)*m_res.x + x) + 0] = math::clamp(math::roundToInt(r * 255.0f), 0, 255);
+				m_data[3*((z*m_res.y + y)*m_res.x + x) + 1] = math::clamp(math::roundToInt(g * 255.0f), 0, 255);
+				m_data[3*((z*m_res.y + y)*m_res.x + x) + 2] = math::clamp(math::roundToInt(b * 255.0f), 0, 255);
+			}
+            break;
+            default: {
+                #if defined(MTS_DEBUG)
+                    Log(EDebug, "editSpectrum() is not supported for EVolumeType %i", m_volumeType);
+                #endif
+            }
+            break;
+		}
     }
 
     Vector lookupVector(const Point &_p) const {
@@ -577,9 +655,56 @@ public:
             return Vector(0.0f);
     }
 
+    void editVector(const Point &_p, const Vector &v) {
+        if(!m_editable) return;
+
+        const Point p = m_worldToGrid.transformAffine(_p);
+
+        Vector local = m_worldToVolume(v);
+
+        // NN interpolation for now
+		const int x = math::roundToInt(p.x);
+		const int y = math::roundToInt(p.y);
+		const int z = math::roundToInt(p.z);
+
+        if (x < 0 || y < 0 || z < 0 || x >= m_res.x ||
+            y >= m_res.y || z >= m_res.z)
+            return;
+
+		switch (m_volumeType) {
+			case EFloat32: {
+				float3 *vectorData = (float3 *) m_data;
+				vectorData[(z*m_res.y + y)*m_res.x + x] = float3(local[0], local[1], local[2]);
+			}
+            break;
+			case EQuantizedDirections: {
+                Point2 sphereCoords = toSphericalCoordinates(local);
+
+                Float theta = sphereCoords.x * INV_PI * 255.0f;
+                Float phi = sphereCoords.y * INV_TWOPI * 255.0f;
+
+                unsigned char thetai = (unsigned char)math::clamp(math::roundToInt(theta), 0, 255);
+                unsigned char phii = (unsigned char)math::clamp(math::roundToInt(phi), 0, 255);
+
+				m_data[2*((z*m_res.y + y)*m_res.x + x)+0] = thetai;
+				m_data[2*((z*m_res.y + y)*m_res.x + x)+1] = phii;
+			}
+            break;
+            default: {
+                #if defined(MTS_DEBUG)
+                    Log(EDebug, "editVector() is not supported for EVolumeType %i", m_volumeType);
+                #endif
+            }
+            break;
+		}
+    }
+
     bool supportsFloatLookups() const { return m_channels == 1; }
     bool supportsSpectrumLookups() const { return m_channels == 3; }
     bool supportsVectorLookups() const { return (m_volumeType == EFloat32 && m_channels == 3) || (m_volumeType == EQuantizedDirections && m_channels == 2); }
+    bool supportsFloatEdits() const { return m_editable && supportsFloatLookups(); }
+    bool supportsSpectrumEdits() const { return m_editable && supportsSpectrumLookups(); }
+    bool supportsVectorEdits() const { return m_editable && supportsVectorLookups(); }
     Float getStepSize() const { return m_stepSize; }
 
     Float getMaximumFloatValue() const {
@@ -611,6 +736,7 @@ protected:
     fs::path m_filename;
     uint8_t *m_data;
     bool m_sendData;
+    bool m_editable;
     EVolumeType m_volumeType;
     Vector3i m_res;
     int m_channels;
