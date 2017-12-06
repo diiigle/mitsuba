@@ -120,6 +120,30 @@ public:
         return m_type == Properties::EVector;
     }
 
+    void editFloat(const Point &p, const Float &f) {
+        m_float = f;
+    }
+
+    void editSpectrum(const Point &p, const Spectrum &s) {
+        m_spectrum = s;
+    }
+
+    void editVector(const Point &p, const Vector &v) {
+        m_vector = v;
+    }
+
+    bool supportsFloatEdits() const {
+        return m_type == Properties::EFloat;
+    }
+
+    bool supportsSpectrumEdits() const {
+        return m_type == Properties::ESpectrum;
+    }
+
+    bool supportsVectorEdits() const {
+        return m_type == Properties::EVector;
+    }
+
     Float getStepSize() const {
         return std::numeric_limits<Float>::infinity();
     }
